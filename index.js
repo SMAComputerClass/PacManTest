@@ -28,6 +28,7 @@ var SQ_STATUS_PAC_ON_GHOST_ON_POWER_PELLET_STATUS = 4;
 var SQ_STATUS_PAC_ON_BOMB = 5;
 var SQ_STATUS_PAC_ON_GOOD_BOMB = 6;
 var SQ_STATUS_PAC_ON_GHOST_INVINCIBLE = 7;
+var SQ_STATUS_PAC_ON_ICE = 8;
 
 var SQ_STATUS_GHOST = 10;
 var SQ_STATUS_GHOST_INVINCIBLE = 11;
@@ -49,6 +50,7 @@ var SQ_STATUS_PELLET = 102;
 var SQ_STATUS_POWER_PELLET = 103;
 var SQ_STATUS_BOMB_ON_BLANK = 104;
 var SQ_STATUS_GOOD_BOMB = 105;
+var SQ_STATUS_ICE = 106;
 
 // Audio files
 var BAJIKO =  "bajiko forest.mp3";
@@ -59,11 +61,11 @@ var SQUARE_SIZE = 50;  // pixel size of individual squares
 var SAFE_ZONE_GHOST = 3; // rows/columns of safety in upper left corner
 var SAFE_ZONE_WALL = 2; //
 
+// ppp
 var GHOST_SPEED_RANGE_LOW = 200; // fastest guy - low + midpoint of range = 1 second
 var GHOST_SPEED_RANGE = 1600;
 
 var GHOST_INTEL_RANGE = 2000;
-
 var RESET_GHOST_DELAY = 5;
 
 var PACMAN_CLASSIC_RIGHT = "<img src='Pacman icon right.jpg'>";
@@ -115,6 +117,7 @@ var ICON_WALL_ONE_THIRD = "<img src='wallIconOneThird.jpg'>";
 var ICON_PELLET = "<img src='PelletIcon.jpg'>";
 var ICON_BOMB = "<img src='BombIcon1.jpg'>";
 var ICON_POWER_PELLET = "<img src='PowerPellet.jpg'>";
+var ICON_ICE = "<img src='ice.jpg'>";
 var ICON_GOOD_BOMB = "<img src='GoodBombIcon.jpg'>";
 
 // wall statuses
@@ -132,18 +135,22 @@ var GOOD_BOMB = 1;
 var NO_GOOD_BOMB = 0;
 var BOMB = 1;
 var NO_GHOST = -1;
+var ICE = 1;
 
 var POWER_PELLET_OFF = 0;
 var POWER_PELLET_ON = 1;
 var POWER_PELLET_DELAY = 5; // seconds
 var POWER_PELLET_GHOST_RATIO = 4; // ghosts per power pellet
 
+var ICE_DELAY = 8; // seconds
+
 // Ghost array index positions, first field is the position on the board, second position is the variable created when the timer function was created.  This must be used to delete the ghost processes when the game ends.
 var GHOST_INDEX_POSITION = 0;   // position on the Board
 var GHOST_INDEX_TIMER = 1;      // move counter id
 var GHOST_INDEX_INTEL = 2;      // intelligence
 var GHOST_INDEX_TYPE = 3;       // ghost type
-var GHOST_INDEX_DEATH_TIMER_ID = 4;       // ghost type
+var GHOST_INDEX_DEATH_TIMER_ID = 4;       // ???
+var GHOST_INDEX_SPEED = 5;  // Need to save it for ice
 
 // Ghost Types
 var GHOST_TYPE_STANDARD = 0;
@@ -157,9 +164,7 @@ var GHOST_TYPE_MEGA = 7;
 var GHOST_TYPE_SPLITTER = 8;
 var GHOST_TYPE_HOPPER = 9;
 
-
 // // Ghost Type Percentages for Random mode
-
 var GHOST_PERCENT_STANDARD = 0;
 var GHOST_PERCENT_INVINCIBLE = 0;
 var GHOST_PERCENT_CHOMPER = 0;
@@ -215,7 +220,9 @@ var PAC_MAN_KEY = "PACMAN";
 var DOOR_SQUARE_LEVEL_1 = 60;   // Level 1 condition
 var chomperKilled = false;      // level 2 condition
 var POWER_PELLET_DELAY_STORY_MODE_LEVEL_2 = 30000;  // a minute delay before pp comes to rescue
+
 var myPowerPelletTimerVar = -1;  // stays -1 if the timer is never used, otherwise stores actual value.  Only need 1.
+var iceTimerVar = -1;  // stays -1 if the timer is never used, otherwise stores actual value.  Only need 1.
 
 var PACMAN_RULES = "Rules for Ultimate Pacman.\nFirst choose Random or Story Mode.  Random mode will have random wall and ghost configurations.  Story Mode is a pre-defined adventure with additional instructions on finishing each level.\nExtra life every " + EXTRA_LIFE_LEVEL + " points in Random Mode.\n1 point per pellet and " + GHOST_POINTS + " for eating a ghost.\nPlayers start with " + BOMBS_START_COUNT + " bombs and can collect more during play (Bomb with check mark).\nBombs destory any walls and Pac Man adjacent to the bomb square.  Ghosts are immune to bombs.\nEat Power Pellets to have " + POWER_PELLET_DELAY + " seconds of time to eat ghosts.\nIn Random Mode, we suggest one power pellet for each " + POWER_PELLET_GHOST_RATIO + " ghosts.\nSee Legend for Ghost Types.";
 
@@ -235,6 +242,9 @@ var rgiSlider = document.getElementById("randomGhostIntelSlider");  // rgi = ran
 
 // speed slider
 var rgsSlider = document.getElementById("randomGhostSpeedSlider");  // rgi = random ghost intelligence
+
+//  number of ice
+var numIce;
 
 var boardSize;  // dimension of board (length or width).  Total squares is (boardSize * boardSize)
 var numberOfGhosts = 0;
@@ -258,7 +268,6 @@ var goodBombTimerID1 = -1
 var goodBombTimerID2 = -1;
 var doorTimerVar = -1; // init
 var chomperKilledTimerVar = -1; // init
-var myPowerPelletTimerVar = -1;
 
 var originalSplitterCount = 0;
 
@@ -270,6 +279,7 @@ var pellets = new Array;
 var powerPellets = new Array;
 var bombs = new Array;
 var goodBombs = new Array;
+var ice = new Array;
 
 // var bajikoForest = new Audio('bajiko forest.mp3');  // removed this old style of audio
 var myAudio = new Audio(BAJIKO);
@@ -479,9 +489,10 @@ startButton.addEventListener('click', function(e)
     numberOfWallsStart = numberOfWalls;
     console.log("Number of Walls = " + numberOfWalls );
     bombsCount = Number(document.getElementById("bombsInput").value);
+    numIce = Number(document.getElementById("iceInput").value);
 
     checkForCheatCode();
-/// zzz
+
     if (validateInputs() == false)
     {
       gameStarted = false;
@@ -495,6 +506,9 @@ startButton.addEventListener('click', function(e)
     createRandomGhosts();
     fillBoardWithPellets();
     createPowerPellets();
+
+    createIce();
+
     document.getElementById("bombsVariable").innerHTML = bombsCount;
 
     // default goodBombs array to zeros
@@ -701,10 +715,15 @@ function restartGame()
     console.log ("I garbage collected a power pellet timer in restart game");
   }
 
+  if (iceTimerVar != -1)
+  {
+    console.log ("I garbage collected a ice timer in restart game");
+    clearTimeout(iceTimerVar);
+    iceTimerVar = -1;
+  }
+
   console.log("Game Over.  In restartGame()");
-
   messageBox.innerHTML = "Welcome to heaven! Player: " + document.getElementById("playerNameInput").value + " ranks " + playerRank + " with a score of " + Number(document.getElementById("scoreVariable").innerHTML) + ".";
-
   myAudio.src = HEAVEN_WIND_CHIMES;
   // var heavenWindChimes = new Audio('heaven wind chimes.mp3');
   myAudio.play();
@@ -935,7 +954,7 @@ function createStoryLevels()
       var speed = ghostSpeed[ghostCount]; // Math.floor(Math.random() * ((GHOST_SPEED_RANGE/100)+1));
       ghostSpeedAddedTogether += speed; // (GHOST_SPEED_RANGE_LOW + (100*speed))/1000  + ghostSpeedAddedTogether;
 
-      ghosts.push([i,0,ghostIntel[ghostCount],ghostType[ghostCount],-1]);
+      ghosts.push([i,0,ghostIntel[ghostCount],ghostType[ghostCount],-1,speed]);   // added speed
 
       console.log ("Story Mode ghost created in square: " + i + " Speed is " + speed);
       //var myVar = setInterval(myGhostTimer, GHOST_SPEED_RANGE_LOW + (100*speed), ghostCount);
@@ -1134,24 +1153,23 @@ function createRandomGhosts()
   {
       var speed;
 
-      // goal is 0 to 16
-      var speed1 = Math.floor(Math.random() * ((GHOST_SPEED_RANGE/100)+1));
+      // starting goal is 0 to 16
+      var speed1 = Math.floor(Math.random() * (GHOST_SPEED_RANGE/100+1));
+      speed1++; // bump up by 1 so that we can later cut by half for ice.  1 is bottom here instead of 0.  Can't cut 0 in half.
 
-
-      // speed is as low as -8 or high as 24
+      // speed is as low as -6 or high as 26
       var speed2 = speed1 - (Number(rgsSlider.value))/10;
 
-      if (speed2 < 0)
-        speed = 0;
-      else if (speed2 > (GHOST_SPEED_RANGE+GHOST_SPEED_RANGE_LOW)/100)
-        speed = GHOST_SPEED_RANGE/100;
+      if (speed2 < 1)   // 2 is new baseline
+        speed = 1;
+      else if (speed2 > ((GHOST_SPEED_RANGE+GHOST_SPEED_RANGE_LOW)/100)+1)  // +2 bump for ice
+        speed = (GHOST_SPEED_RANGE/100)+1;  //
           else
             speed = speed2;
 
+
       // console.log ("Ghost " + i + " created with speed1 = " + speed1 + ". Speed2 = " + speed2 + ". Final speed is " + speed);
-
       // ghostSpeedAddedTogether = (GHOST_SPEED_RANGE_LOW + (100*speed))/1000  + ghostSpeedAddedTogether;
-
       // while loop here - look for valid spot, wall no, safe zone no, ghost yet
       var validSquareFound = false;
 
@@ -1189,19 +1207,19 @@ function createRandomGhosts()
       if (randomNum <= GHOST_PERCENT_STANDARD)
       {
         // STANDARD
-        ghosts.push([squareNum,0,intel,GHOST_TYPE_STANDARD,-1]);
+        ghosts.push([squareNum,0,intel,GHOST_TYPE_STANDARD,-1,speed]);
 
       }
       else if (randomNum <= (GHOST_PERCENT_STANDARD+GHOST_PERCENT_CHOMPER))
       {
         // chomper
-        ghosts.push([squareNum,0,intel,GHOST_TYPE_CHOMPER,-1]);
+        ghosts.push([squareNum,0,intel,GHOST_TYPE_CHOMPER,-1,speed]);
 
       }
       else if (randomNum <= (GHOST_PERCENT_STANDARD+GHOST_PERCENT_CHOMPER+GHOST_PERCENT_INVINCIBLE))
       {
         // invincible
-        ghosts.push([squareNum,0,intel,GHOST_TYPE_INVINCIBLE,-1]);
+        ghosts.push([squareNum,0,intel,GHOST_TYPE_INVINCIBLE,-1,speed]);
 
       }  // peewee
       else if (randomNum <= (GHOST_PERCENT_STANDARD+GHOST_PERCENT_CHOMPER+GHOST_PERCENT_INVINCIBLE+GHOST_PERCENT_PEEWEE))
@@ -1212,63 +1230,53 @@ function createRandomGhosts()
         if (intel > 100)
           intel = 100;
 
-        ghosts.push([squareNum,0,intel,GHOST_TYPE_PEEWEE,-1]);
+        speed = speed - 2;  // speed up ghost if Don Peewee
+
+        if (speed < 1)
+          speed = 1;
+
+        ghosts.push([squareNum,0,intel,GHOST_TYPE_PEEWEE,-1,speed]);
       }
       // Bomber
       else if (randomNum <= (GHOST_PERCENT_STANDARD+GHOST_PERCENT_CHOMPER+GHOST_PERCENT_INVINCIBLE+GHOST_PERCENT_PEEWEE+GHOST_PERCENT_BOMBER))
       {
         // BOMBER
         console.log ("Bomber ghost created.")
-        ghosts.push([squareNum,0,intel,GHOST_TYPE_BOMBER,-1]);
+        ghosts.push([squareNum,0,intel,GHOST_TYPE_BOMBER,-1,speed]);
       }
       // Invisible
       else if (randomNum <= (GHOST_PERCENT_STANDARD+GHOST_PERCENT_CHOMPER+GHOST_PERCENT_INVINCIBLE+GHOST_PERCENT_PEEWEE+GHOST_PERCENT_BOMBER+GHOST_PERCENT_INVISIBLE))
       {
         console.log ("Invisible ghost created.")
-        ghosts.push([squareNum,0,intel,GHOST_TYPE_INVISIBLE,-1]);
+        ghosts.push([squareNum,0,intel,GHOST_TYPE_INVISIBLE,-1,speed]);
       }
       // Mega
       else if (randomNum <= (GHOST_PERCENT_STANDARD+GHOST_PERCENT_CHOMPER+GHOST_PERCENT_INVINCIBLE+GHOST_PERCENT_PEEWEE+GHOST_PERCENT_BOMBER+GHOST_PERCENT_INVISIBLE+GHOST_PERCENT_MEGA))
       {
-        console.log ("Mega ghost created.")
-        ghosts.push([squareNum,0,MEGA_GHOST_INTEL,GHOST_TYPE_MEGA,-1]);
+        console.log ("Mega ghost created.");
+        speed = MEGA_GHOST_SPEED;
+        ghosts.push([squareNum,0,MEGA_GHOST_INTEL,GHOST_TYPE_MEGA,-1,speed]);
       }
       // Splitter
       else if (randomNum <= (GHOST_PERCENT_STANDARD+GHOST_PERCENT_CHOMPER+GHOST_PERCENT_INVINCIBLE+GHOST_PERCENT_PEEWEE+GHOST_PERCENT_BOMBER+GHOST_PERCENT_INVISIBLE+GHOST_PERCENT_MEGA+GHOST_PERCENT_SPLITTER))
       {
         console.log ("Splitter ghost created.")
-        ghosts.push([squareNum,0,intel,GHOST_TYPE_SPLITTER,-1]);
+        speed = 8; // 1 second
+        ghosts.push([squareNum,0,intel,GHOST_TYPE_SPLITTER,-1,speed]);
         originalSplitterCount++;
       }
       // Hopper
       else if (randomNum <= (GHOST_PERCENT_STANDARD+GHOST_PERCENT_CHOMPER+GHOST_PERCENT_INVINCIBLE+GHOST_PERCENT_PEEWEE+GHOST_PERCENT_BOMBER+GHOST_PERCENT_INVISIBLE+GHOST_PERCENT_MEGA+GHOST_PERCENT_SPLITTER+GHOST_PERCENT_HOPPER))
       {
         console.log ("Hopper ghost created.")
-        ghosts.push([squareNum,0,intel,GHOST_TYPE_HOPPER,-1]);
+        ghosts.push([squareNum,0,intel,GHOST_TYPE_HOPPER,-1,speed]);
       }
       else {  // ----------------------   LAST ONE ---------------------------
         // teleporter
-        ghosts.push([squareNum,0,intel,GHOST_TYPE_TELEPORTER,-1]);
+        ghosts.push([squareNum,0,intel,GHOST_TYPE_TELEPORTER,-1,speed]);
       }
 
-      // console.log ("Ghost created in square: " + squareNum + " Speed is " + speed);
-
-      if (ghosts[i][GHOST_INDEX_TYPE] == GHOST_TYPE_PEEWEE)
-      {
-        speed = speed - 2;  // speed up ghost if Don Peewee
-
-        if (speed < 0)
-          speed = 0;
-
-      }  // mega
-      else if (ghosts[i][GHOST_INDEX_TYPE] == GHOST_TYPE_MEGA)
-      {
-        speed = MEGA_GHOST_SPEED;
-      }
-      else if (ghosts[i][GHOST_INDEX_TYPE] == GHOST_TYPE_SPLITTER)
-      {
-        speed = 8; // 1 second
-      }
+      console.log ("----------------- Ghost created in square: " + squareNum + " Speed is " + speed);
 
       var myVar = setInterval(myGhostTimer, GHOST_SPEED_RANGE_LOW + (100*speed), i);
       ghosts[i][GHOST_INDEX_TIMER] = myVar;
@@ -1284,17 +1292,17 @@ function createRandomGhosts()
 
   // update Speed score on scoreboard
 
-  if ((ghostSpeedAddedTogether/numberOfGhosts) > 14)
+  if ((ghostSpeedAddedTogether/numberOfGhosts) > 15)
     document.getElementById("speedVariable").innerHTML = "VERY SLOW";
-  else if ((ghostSpeedAddedTogether/numberOfGhosts) > 12)
+  else if ((ghostSpeedAddedTogether/numberOfGhosts) > 13)
     document.getElementById("speedVariable").innerHTML = "SLOW";
-  else if ((ghostSpeedAddedTogether/numberOfGhosts) > 10)
+  else if ((ghostSpeedAddedTogether/numberOfGhosts) > 11)
     document.getElementById("speedVariable").innerHTML = "LITTLE SLOW";
-  else if ((ghostSpeedAddedTogether/numberOfGhosts) > 6)
+  else if ((ghostSpeedAddedTogether/numberOfGhosts) > 7)
     document.getElementById("speedVariable").innerHTML = "NEUTRAL";
-  else if ((ghostSpeedAddedTogether/numberOfGhosts) > 4)
+  else if ((ghostSpeedAddedTogether/numberOfGhosts) > 5)
     document.getElementById("speedVariable").innerHTML = "LITTLE FAST";
-  else if ((ghostSpeedAddedTogether/numberOfGhosts) > 2)
+  else if ((ghostSpeedAddedTogether/numberOfGhosts) > 3)
     document.getElementById("speedVariable").innerHTML = "FAST";
   else
     document.getElementById("speedVariable").innerHTML = "VERY FAST";
@@ -1380,6 +1388,68 @@ function createPowerPellets()
 
 }  // function
 
+// --------------------------------------------------------------------
+
+function createIce()
+{
+  var squareFound = false;
+  var i;
+
+  // default array to zeros
+  for (i=0; i< boardSize*boardSize; i++)
+    ice[i] = NO_PELLET;
+
+  for (i=0; i< numIce; i++)
+  {
+    squareFound = false;
+
+    while (squareFound == false)
+    {
+      var iceSquare = Math.floor(Math.random() * ((boardSize*boardSize)-1)) + 1;  // return any square on board except 0.
+
+      if (pellets[iceSquare] == PELLET)
+      {
+        squareFound = true;
+        pellets[iceSquare] = NO_PELLET;
+        ice[iceSquare] = ICE;
+        pelletsLeft--;
+      }  // end if
+    } // end while
+
+  } // end for
+
+}  // function
+
+// --------------------------------------
+
+function myIceTimer()  // www
+{
+     var i;
+     for (i=0; i<ghosts.length;i++)  // delete existing timer, create new one at twice speed
+     {
+       console.log("Ice timer called to reset back to normal speed - Ghost: " + i + " Current speed = " + ghosts[i][GHOST_INDEX_SPEED] );
+       console.log("Clearing old timer - Ghost: " + i + " Current timer = " + ghosts[i][GHOST_INDEX_TIMER] );
+
+       var myClearVar = clearInterval(ghosts[i][GHOST_INDEX_TIMER]);
+       console.log ("ClearInterval returned: " + myClearVar);
+
+
+       // var myVar = setInterval(myGhostTimer, (1000 * ghosts[i][GHOST_INDEX_SPEED] * 2), i);
+       // ghosts[i][GHOST_INDEX_TIMER] = myVar;
+
+       ghosts[i][GHOST_INDEX_SPEED] = ghosts[i][GHOST_INDEX_SPEED] * .5;
+
+       var myVar = setInterval(myGhostTimer, GHOST_SPEED_RANGE_LOW + (100*ghosts[i][GHOST_INDEX_SPEED]), i);
+       ghosts[i][GHOST_INDEX_TIMER] = myVar;
+
+       console.log("Ice timer called to reset back to normal speed - Ghost: " + i + " New speed = " + ghosts[i][GHOST_INDEX_SPEED] + " New timer var is " + ghosts[i][GHOST_INDEX_TIMER]);
+
+     }
+
+     iceTimerVar = -1;
+}
+
+
 // ------------------------------------------------------------------------
 // Function takes in the index to the ghost in the ghost array
 
@@ -1450,7 +1520,7 @@ function myGhostTimer(i)
 
       if (tempSplitterNum <= SPLITTER_GHOST_PERCENTAGE)
       {
-          ghosts.push([ghosts[i][GHOST_INDEX_POSITION],0,ghosts[i][GHOST_INDEX_INTEL],GHOST_TYPE_SPLITTER,-1]);
+          ghosts.push([ghosts[i][GHOST_INDEX_POSITION],0,ghosts[i][GHOST_INDEX_INTEL],GHOST_TYPE_SPLITTER,-1,ghosts[i][GHOST_INDEX_SPEED]]);
           var myTimerVar = setInterval(myGhostTimer, 1000, ghosts.length-1);
           ghosts[ghosts.length-1][GHOST_INDEX_TIMER] = myTimerVar;
           console.log ("Splitter Ghost created.");
@@ -1727,7 +1797,7 @@ function myGhostTimer(i)
 
 function myGhostResetTimer(pos)
 {
-  console.log("Reset timer called for ghost in pos = " + pos + ", full ghosts = " + ghosts);
+  console.log("Reset timer called for ghost: " + pos + " with speed = " + ghosts[pos][GHOST_INDEX_SPEED]);
 
   // set the position of the killed ghost back to the resetSquare position
   ghosts[pos][GHOST_INDEX_POSITION] = getGhostResetSquare();
@@ -2217,6 +2287,7 @@ function checkBomb(pos)
 
 } // end function check bomb
 
+
 // -----------------------------------------------------------------------
 
 function restartRound()  // player finished board, continue to next level
@@ -2260,6 +2331,14 @@ function restartRound()  // player finished board, continue to next level
     console.log ("I garbage collected a power pellet timer");
   }
 
+    if (iceTimerVar != -1)
+    {
+      console.log ("I garbage collected a ice timer in restart round");
+      clearTimeout(iceTimerVar);
+      iceTimerVar = -1;
+    }
+
+
    for (i=0; i<ghosts.length;i++)  // clear out old ghost code
    {
      if (ghosts[i][GHOST_INDEX_DEATH_TIMER_ID] != -1)
@@ -2279,15 +2358,6 @@ function restartRound()  // player finished board, continue to next level
           console.log ("Clear Timeout in restart round called on bomb in position " + i + "Timer number " + bombs[i][BOMB_INDEX_TIMER]);
     }
   }
-
-  // for (i=0; i<ghosts.length; i++)
-  // {
-  //   if (ghosts[i][GHOST_INDEX_POSITION] == OFF_THE_BOARD)
-  //   {
-  //         clearTimeout(ghosts[i][GHOST_INDEX_TIMER]);
-  //         console.log ("Clear Timeout in restart round called on ghost");
-  //   }
-  // }
 
   // increase level
   currentLevel++;
@@ -2311,6 +2381,8 @@ function restartRound()  // player finished board, continue to next level
     fillBoardWithPellets();
     pelletsLeft = (boardSize * boardSize) - numberOfWalls;
     createPowerPellets();
+
+    createIce();
 
     // default goodBombs array to zeros
     for (i=0; i< boardSize*boardSize; i++)
@@ -2445,6 +2517,7 @@ function myPPTimer()
 {
     powerPelletStatus = POWER_PELLET_OFF;
 }
+
 
 // ----------------------------------------------------------------------
 
@@ -2783,6 +2856,13 @@ function getSquareStatus(pos)
       } // check ghost
       else
       {
+
+        if (ice[pos] == true)
+        {
+          console.log("Pac on ice");
+          return SQ_STATUS_PAC_ON_ICE;
+        }
+
         if (checkBomb(pos) == true)
           return SQ_STATUS_PAC_ON_BOMB;
 
@@ -2872,6 +2952,9 @@ function getSquareStatus(pos)
     if (powerPellets[pos] == POWER_PELLET)
       return SQ_STATUS_POWER_PELLET;
 
+    if (ice[pos] == ICE)
+        return SQ_STATUS_ICE;
+
     return SQ_STATUS_BLANK;
 
 }  // end function get Square status
@@ -2888,7 +2971,7 @@ function renderGame()
     // console.log ("In Render Game, ghosts are " + ghosts);
     for (i=0;i<boardSize*boardSize; i++)
     {
-      var squareStatus = getSquareStatus(i);  /// zzz
+      var squareStatus = getSquareStatus(i);
 
       //console.log ("Get Square Status called.  Status is " + squareStatus);
       switch (squareStatus)
@@ -2919,7 +3002,7 @@ function renderGame()
                   showPacman(i);  // briefly show in last spt before resetting board
               }
 
-              // zzz - if all pellets eaten - check here for conditions
+              //  - if all pellets eaten - check here for conditions
 
               if (gameMode == MODE_STORY)
               {
@@ -2935,7 +3018,6 @@ function renderGame()
               return;         //  Round over - return here ---------------
 
             }  // finished board
-
 
             if (powerPelletStatus == POWER_PELLET_ON)
             {
@@ -2988,17 +3070,58 @@ function renderGame()
 
           break;
 
-        case SQ_STATUS_PAC_ON_POWER_PELLET:
+        case SQ_STATUS_PAC_ON_ICE:
 
-          powerPelletStatus = POWER_PELLET_ON;
-          powerPellets[i] = NO_PELLET;
+          ice[i] = NO_PELLET;
 
-          // set timer
-          console.log("Power Pellet eaten in square: " + i);
-          var myVar = setTimeout( myPPTimer, POWER_PELLET_DELAY * 1000);
-          showPacmanPP(i);
+          //  check first if you already are on ice.  If you are, only reset the timer.
+          if (iceTimerVar != -1)
+          {
+             console.log ("Killed current ice timer.");
+             clearTimeout(iceTimerVar);
+
+             iceTimerVar = setTimeout( myIceTimer, ICE_DELAY * 1000);
+          }
+          else  // not already on ice, update ghosts now
+          {
+              // delete ghost timer, create new one at half speed -
+               var ii;
+               for (ii=0; ii<ghosts.length;ii++)  // update speeds to half speed
+               {
+                  console.log("Ice timer called to reduce ghost speed - Ghost: " + ii + " Current speed = " + ghosts[ii][GHOST_INDEX_SPEED] + " Current timer var is " + ghosts[ii][GHOST_INDEX_TIMER]);
+
+                  var myClearVar = clearInterval(ghosts[ii][GHOST_INDEX_TIMER]);
+
+                  ghosts[ii][GHOST_INDEX_SPEED] = ghosts[ii][GHOST_INDEX_SPEED]*2;
+
+                  var myVar = setInterval(myGhostTimer, GHOST_SPEED_RANGE_LOW + (100*ghosts[ii][GHOST_INDEX_SPEED]), ii);
+                  ghosts[ii][GHOST_INDEX_TIMER] = myVar;
+
+                 console.log("Ice timer called to reduce ghost speed - Ghost: " + ii + " New speed = " + ghosts[ii][GHOST_INDEX_SPEED] + " Current timer var is " + ghosts[ii][GHOST_INDEX_TIMER]);
+
+               }
+
+              iceTimerVar = setTimeout( myIceTimer, ICE_DELAY * 1000);
+              showPacman(i);
+          }
 
           break;
+
+          case SQ_STATUS_PAC_ON_POWER_PELLET:
+
+            powerPelletStatus = POWER_PELLET_ON;
+            powerPellets[i] = NO_PELLET;
+
+            // set timer
+            console.log("Power Pellet eaten in square: " + i);
+
+            // previous command below was var myvar =
+            myPowerPelletTimerVar = setTimeout( myPPTimer, POWER_PELLET_DELAY * 1000);
+            // check this - should this myVar = the global powerPell
+            showPacmanPP(i);
+
+            break;
+
 
         case SQ_STATUS_PAC_ON_GHOST_ON_POWER_PELLET_STATUS:
 
@@ -3036,7 +3159,6 @@ function renderGame()
                   }
                 }
               }
-
 
               // only bring ghost back to life if not a mega ghost and not an extra splitter
               if ((ghosts[j][GHOST_INDEX_TYPE] != GHOST_TYPE_MEGA) && (splitterCount < originalSplitterCount+1))
@@ -3293,6 +3415,11 @@ function renderGame()
 
         //case SQ_STATUS_PAC_ON_SPECIAL:
         //  break;
+
+        case SQ_STATUS_ICE:
+
+          squares[i].innerHTML = ICON_ICE;
+          break;
 
         case SQ_STATUS_BOMB_ON_BLANK:
 
